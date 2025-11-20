@@ -20,7 +20,6 @@ def handle_file(client, file_name):
     client.send('OK_START_SENDING'.encode())
 
     sha = hashlib.sha256()
-
     size = os.path.getsize(file_name)
 
     with open(file_name, 'rb') as f:
@@ -31,9 +30,7 @@ def handle_file(client, file_name):
             sha.update(chunk)
 
     hash = sha.hexdigest()
-
     client.send(hash.encode())
-
     client.send(struct.pack('!Q', size))
 
     with open(file_name, 'rb') as f:
@@ -48,9 +45,8 @@ def handle_file(client, file_name):
 
 def handle_message(client, string):
     messages.append(string)
-    response = '\n'.join(messages)
+    response = '\n'.join(messages) + '\nOK\n'
     client.sendall(response.encode())
-    client.send('OK'.encode())
     
 
 def handle(client, address):
@@ -61,7 +57,7 @@ def handle(client, address):
                 file_name = message.split()[1]
                 handle_file(client, file_name)
             elif message.startswith('MESSAGE'):
-                string = ' '.join(message.split()[1:])
+                string = f'{address[0]}:{address[1]}: ' + ' '.join(message.split()[1:])
                 handle_message(client, string)
             else:
                 client.close()
@@ -69,7 +65,7 @@ def handle(client, address):
                 break
         except Exception as e:
             print(f'Erro interno do servidor: {e}')
-            client.send(''.encode())
+            client.close()
 
 def receive():
     while True:

@@ -9,44 +9,43 @@ SERVER_PORT = 8000
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 client.connect((SERVER_IP, SERVER_PORT))
 
-def receive(msg_type, file_name=''):
-    try:
-        if msg_type == 'MESSAGE':
-            response = client.recv(4096).decode('ascii')
-            print('Mensagens:')
-            while response != 'OK':
-                print(response)
-                response = client.recv(4096).decode('ascii')
-        else:
-            response = client.recv(64).decode('ascii')
-            if response == 'FILE_NOT_FOUND':
-                raise FileNotFoundError('Arquivo não encontrado pelo servidor')
+def receive_message():
+    buffer = ''
+    while True:
+        buffer = client.recv(4096).decode('ascii')
+        if buffer.endswith('OK\n'):
+            break
 
-            expected_hash = client.recv(64).decode()
-            size = struct.unpack('!Q', client.recv(8))[0]
+    buffer = buffer[:-3]
 
-            received = b''
-            while len(received) < size:
-                chunk = client.recv(4096)
-                if not chunk:
-                    break
-                received += chunk
+    print('Mensagens: ')
+    print(buffer)
 
-            sha = hashlib.sha256()
-            sha.update(received)
-            final_hash = sha.hexdigest()
+def receive_file(file_name):
+    response = client.recv(64).decode('ascii')
+    if response == 'FILE_NOT_FOUND':
+        raise FileNotFoundError('Arquivo não encontrado pelo servidor')
 
-            if expected_hash != final_hash:
-                raise KeyError(f'Hashes diferentes - Esperado: {expected_hash} - Recebido: {final_hash}')
+    expected_hash = client.recv(64).decode()
+    size = struct.unpack('!Q', client.recv(8))[0]
 
-            with open(file_name, 'wb') as f:
-                f.write(received)
+    received = b''
+    while len(received) < size:
+        chunk = client.recv(4096)
+        if not chunk:
+            break
+        received += chunk
 
-            print("Arquivo recebido com sucesso")
+    sha = hashlib.sha256()
+    sha.update(received)
+    final_hash = sha.hexdigest()
 
-    except Exception as e:
-        print(f'Erro na comunicação: {e}')
-        client.close()
+    if expected_hash != final_hash:
+        raise Exception(f'Hashes diferentes - Esperado: {expected_hash} - Recebido: {final_hash}')
+
+    with open(file_name, 'wb') as f:
+        f.write(received)
+    print("Arquivo recebido com sucesso")
 
 def send():
     while True:
@@ -57,18 +56,19 @@ def send():
                 client.close()
                 break
             elif message.startswith('Arquivo'):
-                    file = 'GET ' + message.split()[1]
-                    client.sendall(file.encode())
-                    receive('GET', message.split()[1])
+                file = 'GET ' + message.split()[1]
+                client.sendall(file.encode())
+                receive_file(message.split()[1])
             elif message.startswith('Chat'):
-                    chat = 'MESSAGE ' + ''.join(message.split()[1:])
-                    client.sendall(chat.encode())
-                    receive('MESSAGE')
+                chat = 'MESSAGE ' + ' '.join(message.split()[1:])
+                client.sendall(chat.encode())
+                receive_message()
             else:
                 print(f'Método de comunicação inválido: {message}')
                 print('Opções são (Sair, Arquivo [file_name], Chat [Mensagem])')
         except Exception as e:
             print(f'Erro na comunicação com o servidor: {e}')
+            client.close()
 
 receive_thread = threading.Thread(target=send)
 receive_thread.start()
