@@ -18,6 +18,8 @@ def handle_file(client, file_name):
     if not os.path.exists(file_name):
         client.send('FILE_NOT_FOUND'.encode())
         print(f'Arquivo {file_name} não encontrado')
+        return
+
     # Envia confirmação de início antes dos dados
     client.send('OK_START_SENDING'.encode())
 
